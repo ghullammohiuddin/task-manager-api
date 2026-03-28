@@ -160,4 +160,4 @@ Ghullam Mohiuddin
 Backend Developer (Node.js, SQL, JWT, Express.JS)
 
 GitHub: https://github.com/ghullammohiuddin 
-LinkedIn: https://www.linkedin.com/in/yourprofile  
+LinkedIn: https://www.linkedin.com/in/GhullamMohiuddin
