@@ -1,9 +1,20 @@
 import db from "../database/db.connection.js";
+import { createTaskSchema, taskIdSchema, getTaskQuerySchema } from "../validators/task.validator.js";
 
 
 const addTask = async (req, res) => {
     try {
-        const { title, description = null } = req.body;
+
+        const { value, error } = createTaskSchema.validate(req.body, { abortEarly: false })
+
+        if (error) {
+            return res.status(400).json({
+                success: false,
+                message: error.details.map(err => err.message)
+            })
+        }
+
+        const { title, description } = value;
         const userId = req.user.id;
 
         if (!title) {
@@ -41,12 +52,19 @@ const addTask = async (req, res) => {
 const getTasks = async (req, res) => {
     try {
 
-        const page = req.query.page || 1;
-        const limit = req.query.limit || 10;
+        const { value, error } = getTaskQuerySchema.validate(req.query, {
+            abortEarly: false,
+            convert: true
+        })
 
-        if (page < 1) page = 1;
-        if (limit < 1) limit = 10;
-        if (limit > 50) limit = 50;
+        if (error) {
+            return res.status(400).json({
+                success: false,
+                message: error.details.map(err => err.message)
+            })
+        }
+
+        const { page, limit, status, sort, order } = value;
 
         const offset = (page - 1) * limit;
         const userId = req.user.id;
@@ -87,15 +105,19 @@ const getTasks = async (req, res) => {
 const getTaskById = async (req, res) => {
 
     try {
-        const id = parseInt(req.params.id);
-        const userId = req.user.id;
 
-        if (isNaN(id)) {
+        const { value, error } = taskIdSchema.validate(req.params, { convert: true })
+
+        if (error) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid task ID"
-            });
+                message: error.details[0].message
+            })
         }
+
+        const id = value.id
+        const userId = req.user.id
+
 
         const [rows] = await db.query(
             `SELECT * FROM tasks WHERE id = ? AND user_id = ?`,
@@ -113,7 +135,9 @@ const getTaskById = async (req, res) => {
             success: true,
             data: rows[0]
         })
+
     } catch (error) {
+
         return res.status(500).json({
             success: false,
             message: error.message
@@ -146,7 +170,7 @@ const updateTask = async (req, res) => {
 
         const allowedStatus = ["pending", "completed"];
 
-        if (status, !allowedStatus.includes(status)) {
+        if (status && !allowedStatus.includes(status)) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid status value"

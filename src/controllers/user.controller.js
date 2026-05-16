@@ -1,13 +1,22 @@
 import db from "../database/db.connection.js";
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcrypt'
+import { registerSchema, loginSchema } from "../validators/auth.validator.js";
 
 const registerUser = async (req, res) => {
+
     try {
-        const { name, email, password } = req.body;
-        if (!name || !email || !password) {
-            return res.status(400).json({ success: false, message: "All fields are required" })
+
+        const { value, error } = registerSchema.validate(req.body);
+
+        if (error) {
+            return res.status(400).json({
+                success: false,
+                message: error.details[0].message
+            });
         }
+
+        const { name, email, password } = value;
 
         const [existingUser] = await db.query(
             `SELECT * FROM users WHERE email = ?`,
@@ -36,17 +45,24 @@ const registerUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        if (!email || !password) {
-            return res.status(401).json({ success: false, message: "Email and password required!" })
+
+        const { value, error } = loginSchema.validate(req.body, { abortEarly: false })
+
+        if (error) {
+            return res.status(400).json({
+                success: false,
+                message: error.details.map(err => err.message)
+            })
         }
+
+        const { email, password } = value;
 
         const [rows] = await db.query(`SELECT * FROM users WHERE email = ?`, [email])
         if (rows.length === 0) {
             return res.status(401).json({ success: false, message: "Invalid Credentials" })
         }
         const user = rows[0]
-        const match = bcrypt.compare(password, user.password)
+        const match = await bcrypt.compare(password, user.password)
         if (!match) {
             return res.status(400).json({ success: false, message: 'Invalid credentials!' });
         }
