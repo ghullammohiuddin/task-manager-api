@@ -12,7 +12,7 @@ const authenticate = (req,res,next) => {
         req.user = { id: decoded.id, email: decoded.email };
         next();
     } catch (error) {
-        return res.status(401).json({sccuess: false, message: "Invalid Token"})
+        return res.status(401).json({success: false, message: "Invalid Token"})
     }
 };
 

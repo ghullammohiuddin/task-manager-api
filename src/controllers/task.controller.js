@@ -1,272 +1,242 @@
 import db from "../database/db.connection.js";
-import { createTaskSchema, taskIdSchema, getTaskQuerySchema } from "../validators/task.validator.js";
+import {
+  createTaskSchema,
+  taskIdSchema,
+  getTaskQuerySchema,
+  updateTaskSchema,
+} from "../validators/task.validator.js";
+import catchAsync from "../utils/catchAsync.js";
+import AppError from "../utils/AppError.js";
 
+const addTask = catchAsync(async (req, res, next) => {
+  const { value: bodyValue, error: bodyError } = createTaskSchema.validate(
+    req.body,
+    {
+      abortEarly: false,
+    },
+  );
 
-const addTask = async (req, res) => {
-    try {
+  if (bodyError) {
+    return next(
+      new AppError(
+        bodyError.details.map((err) => err.message),
+        400,
+      ),
+    );
+  }
 
-        const { value, error } = createTaskSchema.validate(req.body, { abortEarly: false })
+  const { title, description } = bodyValue;
+  const userId = req.user.id;
 
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: error.details.map(err => err.message)
-            })
-        }
+  const [result] = await db.query(
+    `INSERT INTO tasks (title, description, user_id) VALUES (?, ?, ?)`,
+    [title, description, userId],
+  );
 
-        const { title, description } = value;
-        const userId = req.user.id;
+  return res.status(201).json({
+    success: true,
+    message: "Task created successfully!",
+    data: {
+      id: result.insertId,
+      title,
+      description,
+      userId,
+    },
+  });
+});
 
-        if (!title) {
-            return res.status(400).json({
-                success: false,
-                message: "Title can't be empty!"
-            });
-        }
+const getTasks = catchAsync(async (req, res, next) => {
+  const { value: queryValue, error: queryError } = getTaskQuerySchema.validate(
+    req.query,
+    {
+      abortEarly: false,
+      convert: true,
+    },
+  );
 
-        const [result] = await db.query(
-            `INSERT INTO tasks (title, description, user_id) VALUES (?, ?, ?)`,
-            [title, description, userId]
-        );
+  if (queryError) {
+    return next(
+      new AppError(
+        queryError.details.map((err) => err.message),
+        400,
+      ),
+    );
+  }
 
-        return res.status(201).json({
-            success: true,
-            message: "Task created successfully!",
-            data: {
-                id: result.insertId,
-                title,
-                description,
-                userId
-            }
-        });
+  const { page, limit, status, sort, order } = queryValue;
+  const offset = (page - 1) * limit;
+  const userId = req.user.id;
 
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
+  // dynamic WHERE clause
+  let whereClause = "WHERE user_id = ?";
+  let queryParams = [userId];
 
+  if (status) {
+    whereClause += " AND status = ?";
+    queryParams.push(status);
+  }
 
-const getTasks = async (req, res) => {
-    try {
+  // whitelist sort columns — SQL injection prevention
+  const allowedSort = ["created_at", "title"];
+  const allowedOrder = ["asc", "desc"];
+  const sortColumn = allowedSort.includes(sort) ? sort : "created_at";
+  const sortOrder = allowedOrder.includes(order) ? order.toUpperCase() : "DESC";
 
-        const { value, error } = getTaskQuerySchema.validate(req.query, {
-            abortEarly: false,
-            convert: true
-        })
+  const [rows] = await db.query(
+    `SELECT * FROM tasks ${whereClause} ORDER BY ${sortColumn} ${sortOrder} LIMIT ? OFFSET ?`,
+    [...queryParams, limit, offset],
+  );
 
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: error.details.map(err => err.message)
-            })
-        }
+  // same whereClause so count matches the filter
+  const [countResult] = await db.query(
+    `SELECT COUNT(*) AS total FROM tasks ${whereClause}`,
+    queryParams,
+  );
 
-        const { page, limit, status, sort, order } = value;
+  const totalTasks = countResult[0].total;
+  const totalPages = Math.ceil(totalTasks / limit);
 
-        const offset = (page - 1) * limit;
-        const userId = req.user.id;
+  return res.status(200).json({
+    success: true,
+    data: rows,
+    pagination: {
+      page,
+      limit,
+      totalPages,
+      totalTasks,
+    },
+  });
+});
 
+const getTaskById = catchAsync(async (req, res, next) => {
+  const { value: paramValue, error: paramError } = taskIdSchema.validate(
+    req.params,
+    {
+      convert: true,
+    },
+  );
 
-        const [rows] = await db.query(
-            `SELECT * FROM tasks WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-            [userId, limit, offset]
-        );
+  if (paramError) {
+    return next(new AppError(paramError.details[0].message, 400));
+  }
 
-        const [countResult] = await db.query(
-            'SELECT COUNT(*) AS total FROM tasks WHERE user_id = ?',
-            [userId]
-        );
+  const id = paramValue.id;
+  const userId = req.user.id;
 
-        const totalTasks = countResult[0].total;
-        const totalPages = Math.ceil(totalTasks / limit);
+  const [rows] = await db.query(
+    `SELECT * FROM tasks WHERE id = ? AND user_id = ?`,
+    [id, userId],
+  );
 
-        return res.status(200).json({
-            success: true,
-            data: rows,
-            pagination: {
-                page,
-                limit,
-                totalPages,
-                totalTasks
-            }
-        });
+  if (rows.length === 0) {
+    return next(new AppError("Task not found!", 404));
+  }
 
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
+  return res.status(200).json({
+    success: true,
+    data: rows[0],
+  });
+});
 
-const getTaskById = async (req, res) => {
+const updateTask = catchAsync(async (req, res, next) => {
+  // use taskIdSchema for consistent ID validation — same as getTaskById
+  const { value: paramValue, error: paramError } = taskIdSchema.validate(
+    req.params,
+    { convert: true },
+  );
+  if (paramError) return next(new AppError("Invalid task ID", 400));
 
-    try {
+  // validate body with Joi instead of manual checks
+  const { value: bodyValue, error: bodyError } = updateTaskSchema.validate(
+    req.body,
+    { abortEarly: false },
+  );
+  if (bodyError)
+    return next(
+      new AppError(
+        bodyError.details.map((err) => err.message),
+        400,
+      ),
+    );
 
-        const { value, error } = taskIdSchema.validate(req.params, { convert: true })
+  const id = paramValue.id;
+  const userId = req.user.id;
+  const { title, description, status } = bodyValue;
 
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: error.details[0].message
-            })
-        }
+  // check task exists and belongs to user
+  const [rows] = await db.query(
+    `SELECT * FROM tasks WHERE id = ? AND user_id = ?`,
+    [id, userId],
+  );
+  if (rows.length === 0) return next(new AppError("Task Not Found", 404));
 
-        const id = value.id
-        const userId = req.user.id
+  // build dynamic update query
+  const updates = [];
+  const values = [];
 
+  if (title) {
+    updates.push("title = ?");
+    values.push(title);
+  }
+  if (description) {
+    updates.push("description = ?");
+    values.push(description);
+  }
+  if (status) {
+    updates.push("status = ?");
+    values.push(status);
+  }
 
-        const [rows] = await db.query(
-            `SELECT * FROM tasks WHERE id = ? AND user_id = ?`,
-            [id, userId]
-        )
+  values.push(id, userId);
+  await db.query(
+    `UPDATE tasks SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`,
+    values,
+  );
 
-        if (rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Task Not Found"
-            })
-        }
+  const [updatedTask] = await db.query(
+    `SELECT * FROM tasks WHERE id = ? AND user_id = ?`,
+    [id, userId],
+  );
 
-        return res.status(200).json({
-            success: true,
-            data: rows[0]
-        })
+  return res.status(200).json({
+    success: true,
+    message: "Task Updated Successfully",
+    data: updatedTask[0],
+  });
+});
 
-    } catch (error) {
+const deleteTask = catchAsync(async (req, res, next) => {
+  const { value: paramValue, error: paramError } = taskIdSchema.validate(
+    req.params,
+    { convert: true },
+  );
 
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        })
-    }
-}
+  if (paramError) {
+    return next(new AppError(paramError.details[0].message, 400));
+  }
 
-const updateTask = async (req, res) => {
-    try {
-        const { title, description, status } = req.body;
-        const userId = req.user.id;
-        const id = parseInt(req.params.id);
+  const userId = req.user.id;
+  const id = paramValue.id;
 
-        let updates = [];
-        let values = [];
+  const [rows] = await db.query(
+    `SELECT * FROM tasks WHERE id = ? AND user_id = ?`,
+    [id, userId],
+  );
 
-        if (isNaN(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid task ID"
-            });
-        }
+  if (rows.length === 0) {
+    return next(new AppError("Task not found!", 404));
+  }
 
-        if (!title && !description && !status) {
-            return res.status(400).json({
-                success: false,
-                message: "Please provide the parameters to update task!"
-            })
-        }
+  await db.query(`DELETE FROM tasks WHERE id = ? AND user_id = ?`, [
+    id,
+    userId,
+  ]);
 
-        const allowedStatus = ["pending", "completed"];
+  return res.status(200).json({
+    success: true,
+    message: "Task deleted successfully",
+    deletedTask: rows[0],
+  });
+});
 
-        if (status && !allowedStatus.includes(status)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid status value"
-            });
-        }
-
-        const [rows] = await db.query(
-            `SELECT * FROM tasks WHERE id = ? AND user_id = ?`,
-            [id, userId]
-        )
-
-        if (rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Task Not Found"
-            })
-        }
-
-        if (title) {
-            updates.push("title = ?");
-            values.push(title)
-        }
-
-        if (description) {
-            updates.push("description = ?");
-            values.push(description);
-        }
-
-        if (status) {
-            updates.push("status = ?");
-            values.push(status);
-        }
-
-        const updateQuery = `UPDATE tasks SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`
-
-        values.push(id, userId);
-
-        await db.query(updateQuery, values);
-
-        const [updatedTask] = await db.query(
-            `SELECT * FROM tasks WHERE id = ? AND user_id = ?`,
-            [id, userId]
-        );
-
-        return res.status(200).json({
-            success: true,
-            message: "Task Updated Successfully",
-            data: updatedTask[0]
-        });
-
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        })
-    }
-}
-
-const deleteTask = async (req, res) => {
-    try {
-        const id = parseInt(req.params.id);
-        const userId = req.user.id;
-
-        if (isNaN(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid task ID"
-            });
-        }
-
-        const [rows] = await db.query(
-            `SELECT * FROM tasks WHERE id = ? AND user_id = ?`,
-            [id, userId]
-        )
-
-        if (rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Task Not Found"
-            })
-        }
-
-        await db.query(`DELETE FROM tasks WHERE id = ? AND user_id = ?`, [id, userId])
-
-        return res.status(200).json({
-            success: true,
-            message: "Task deleted successfully",
-            deletedTask: rows[0]
-        })
-
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        })
-    }
-}
-
-export { addTask, getTasks, getTaskById, updateTask, deleteTask }
+export { addTask, getTasks, getTaskById, updateTask, deleteTask };
