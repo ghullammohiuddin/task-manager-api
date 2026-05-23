@@ -1,163 +1,228 @@
-# Task Manager API 
+# Task Manager API
 
-A secure and scalable RESTful API for managing tasks with user authentication and authorization. Built using Node.js, Express.js, and MySQL, this project demonstrates full CRUD operations, user-based access control, and production-level features like pagination.
+A secure and scalable RESTful API for managing tasks with user authentication and authorization. Built using Node.js, Express.js, and MySQL, this project demonstrates production-level backend practices including service layer architecture, centralized error handling, input validation, and dynamic SQL queries.
 
 ---
 
-##  Overview
+## Overview
 
 This Task Manager API allows users to:
 
-- Register and login securely  
-- Create, read, update, and delete tasks  
-- Access only their own tasks (authorization)  
-- Retrieve tasks efficiently using pagination  
-- Receive structured responses with proper error handling  
-
-This project reflects real-world backend practices and is suitable for internships and production-ready API design.
+- Register and login securely with hashed passwords
+- Create, read, update, and delete their own tasks
+- Access only their own tasks (user-specific authorization)
+- Filter tasks by status, sort by field, and paginate results
+- Receive structured, consistent error responses
 
 ---
 
-##  Tech Stack
+## Tech Stack
 
-| Category         | Technology                |
-|----------------|--------------------------|
-| Backend         | Node.js, Express.js      |
-| Database        | MySQL (mysql2/promise)   |
-| Authentication  | JWT (JSON Web Tokens)    |
-| Environment     | dotenv                   |
-| Version Control | Git & GitHub             |
-
----
-
-##  Features
-
-- User registration and login with hashed passwords  
-- JWT-based authentication middleware  
-- Full CRUD operations for tasks  
-- User-specific access control (authorization)  
-- Pagination support for task listing  
-- Input validation and error handling  
-- Dynamic SQL queries for partial updates  
-- Clean and modular project structure  
+| Category       | Technology              |
+|----------------|-------------------------|
+| Backend        | Node.js, Express.js     |
+| Database       | MySQL (mysql2/promise)  |
+| Authentication | JWT (JSON Web Tokens)   |
+| Validation     | Joi                     |
+| Security       | bcrypt                  |
+| Environment    | dotenv                  |
+| Version Control| Git & GitHub            |
 
 ---
 
-##  API Endpoints
+## Features
 
-###  Authentication
-
-| Method | Endpoint             | Description                  |
-|--------|---------------------|------------------------------|
-| POST   | /api/auth/register  | Register a new user          |
-| POST   | /api/auth/login     | Login and receive JWT token  |
-
----
-
-###  Tasks
-
-| Method | Endpoint          | Description                                   |
-|--------|------------------|-----------------------------------------------|
-| POST   | /api/tasks       | Create a new task                             |
-| GET    | /api/tasks       | Get all tasks (supports pagination)           |
-| GET    | /api/tasks/:id   | Get a specific task by ID                     |
-| PUT    | /api/tasks/:id   | Update a task (partial updates supported)     |
-| DELETE | /api/tasks/:id   | Delete a task                                 |
+- User registration and login with bcrypt password hashing
+- JWT-based authentication middleware protecting all task routes
+- Full CRUD operations for tasks
+- User-specific data access control
+- Centralized error handling with custom AppError class
+- Automatic JWT error handling (expired/invalid tokens)
+- catchAsync wrapper eliminating try-catch from controllers
+- Service layer separating business logic from controllers
+- Joi request validation on all endpoints
+- Pagination, status filtering, and sorting with SQL injection prevention
+- Dynamic SQL queries for partial updates
+- Clean MVC architecture with separate routes, controllers, services, validators
 
 ---
 
-##  Query Parameters
+## Project Structure
 
-Pagination is supported on:
+```
+src/
+├── config/
+│   └── env.config.js
+├── controllers/
+│   ├── task.controller.js
+│   └── user.controller.js
+├── database/
+│   └── db.connection.js
+├── middlewares/
+│   ├── auth.middleware.js
+│   └── errorhandler.middleware.js
+├── migrations/
+│   ├── 001_create_user_table.sql
+│   └── 002_create_task_table.sql
+├── routes/
+│   ├── auth.route.js
+│   └── task.route.js
+├── services/
+│   ├── task.service.js
+│   └── user.service.js
+├── utils/
+│   ├── AppError.js
+│   └── catchAsync.js
+└── validators/
+    ├── auth.validator.js
+    └── task.validator.js
+```
 
-GET /api/tasks/get-tasks
+---
 
-| Parameter | Type   | Description                          | Default |
-|----------|--------|--------------------------------------|--------|
-| page     | number | Page number                          | 1      |
-| limit    | number | Tasks per page (max: 50)             | 10     |
+## API Endpoints
+
+### Authentication
+
+| Method | Endpoint            | Description                 |
+|--------|---------------------|-----------------------------|
+| POST   | /api/auth/register  | Register a new user         |
+| POST   | /api/auth/login     | Login and receive JWT token |
+
+### Tasks (all protected — requires Bearer token)
+
+| Method | Endpoint                        | Description                        |
+|--------|---------------------------------|------------------------------------|
+| POST   | /api/tasks/add-task             | Create a new task                  |
+| GET    | /api/tasks/get-tasks            | Get all tasks (pagination/filters) |
+| GET    | /api/tasks/get-task-by-id/:id   | Get a specific task by ID          |
+| PATCH  | /api/tasks/update-task/:id      | Update a task (partial updates)    |
+| DELETE | /api/tasks/delete-task/:id      | Delete a task                      |
+
+---
+
+## Query Parameters
+
+Supported on `GET /api/tasks/get-tasks`:
+
+| Parameter | Type   | Description                        | Default    |
+|-----------|--------|------------------------------------|------------|
+| page      | number | Page number                        | 1          |
+| limit     | number | Tasks per page (max: 50)           | 10         |
+| status    | string | Filter by status (pending/completed)| —         |
+| sort      | string | Sort field (created_at/title)      | created_at |
+| order     | string | Sort direction (asc/desc)          | desc       |
 
 ### Example Request
 
-GET /api/tasks/get-tasks?page=2&limit=5
+```
+GET /api/tasks/get-tasks?page=1&limit=5&status=pending&sort=title&order=asc
+```
 
 ### Example Response
 
+```json
 {
   "success": true,
-  "data": [],
+  "data": [...],
   "pagination": {
-    "page": 2,
+    "page": 1,
     "limit": 5,
-    "totalPages": 4,
-    "totalTasks": 20
+    "totalPages": 2,
+    "totalTasks": 8
   }
 }
+```
 
 ---
 
-##  Setup & Installation
+## Setup & Installation
 
 ### Clone the repository
 
-git clone https://github.com/ghullammohiuddin/task-manager-api.git 
-cd task-manager-api  
+```bash
+git clone https://github.com/ghullammohiuddin/task-manager-api.git
+cd task-manager-api
+```
 
 ### Install dependencies
 
-npm install  
+```bash
+npm install
+```
 
 ### Configure environment variables
 
 Create a `.env` file in the root directory:
 
-DB_HOST=your_db_host  
-DB_USER=your_db_user  
-DB_PASSWORD=your_db_password  
-DB_NAME=your_db_name  
-JWT_SECRET=your_secret_key  
-PORT=3000  
+```env
+MY_SQL_URL=your_mysql_connection_url
+JWT_SECRET=your_secret_key
+PORT=3000
+```
 
-### Run the server
+### Run migrations
 
-npm start  
+Run these SQL files in your database in order:
 
-Server will run at:  
-http://localhost:3000  
+```
+src/migrations/001_create_user_table.sql
+src/migrations/002_create_task_table.sql
+```
 
----
+### Start the server
 
-##  Key Learnings
+```bash
+npm run dev
+```
 
-- Built secure authentication using JWT  
-- Implemented authorization with user-based data access  
-- Designed RESTful APIs with proper structure and status codes  
-- Implemented pagination using SQL LIMIT and OFFSET  
-- Used dynamic SQL queries for flexible updates  
-- Organized backend into scalable architecture  
+Server runs at `http://localhost:3000`
 
 ---
 
-##  Future Improvements
+## Error Handling
 
-- Filtering tasks by status (pending, completed)  
-- Sorting support (by date, title)  
-- Refresh token authentication  
-- Deployment (Railway, Render)  
-- Unit and integration testing  
+All errors return consistent JSON responses:
+
+```json
+{
+  "success": false,
+  "status": "fail",
+  "message": "Error description"
+}
+```
+
+| Scenario             | Status | Message                              |
+|----------------------|--------|--------------------------------------|
+| No token             | 401    | No Token Provided                    |
+| Invalid token        | 401    | Invalid token. Please log in again.  |
+| Expired token        | 401    | Your token has expired.              |
+| Task not found       | 404    | Task not found!                      |
+| Validation error     | 400    | Detailed validation message          |
+| Server error         | 500    | Something went wrong                 |
 
 ---
 
-##  License
+## Future Improvements
+
+- Refresh token authentication
+- Rate limiting
+- Unit and integration tests
+- Deployment (Railway, Render)
+- TypeScript migration
+
+---
+
+## License
 
 This project is licensed under the MIT License.
 
 ---
 
-##  Author
+## Author
 
-Ghullam Mohiuddin
-Backend Developer (Node.js, SQL, JWT, Express.JS)
+**Ghullam Mohiuddin**
+Backend Developer (Node.js, Express.js, MySQL, JWT)
 
-GitHub: https://github.com/ghullammohiuddin 
-LinkedIn: https://www.linkedin.com/in/GhullamMohiuddin
+GitHub: https://github.com/ghullammohiuddin
+LinkedIn: https://www.linkedin.com/in/ghullam-mohiuddin-0916bb377
