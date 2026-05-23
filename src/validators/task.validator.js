@@ -47,7 +47,7 @@ const getTaskQuerySchema = joi.object({
 });
 
 const updateTaskSchema = joi.object({
-  title: joi.string().min(3).max(100).required().messages({
+  title: joi.string().min(3).max(100).messages({
     "string.empty": "Title cannot be empty",
     "string.min": "Title must be at least 3 characters",
     "any.required": "Title is required",
