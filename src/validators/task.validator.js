@@ -46,21 +46,15 @@ const getTaskQuerySchema = joi.object({
   order: joi.string().valid("asc", "desc").default("desc").optional(),
 });
 
-const updateTaskSchema = joi.object({
-  title: joi.string().min(3).max(100).messages({
-    "string.empty": "Title cannot be empty",
-    "string.min": "Title must be at least 3 characters",
-    "any.required": "Title is required",
-  }),
-
-  description: joi.string().max(500).allow("").optional().messages({
-    "string.max": "Description cannot exceed 500 characters",
-  }),
-
-  status: joi.string().required().valid("pending", "completed").messages({
-    "any.only": "Status must be either pending or completed",
+const updateTaskSchema = joi
+  .object({
+    title: joi.string().min(3).max(100).optional(),
+    description: joi.string().max(500).allow("").optional(),
+    status: joi.string().valid("pending", "completed").optional(),
   })
-
-});
+  .min(1)
+  .messages({
+    "object.min": "Please provide at least one field to update",
+  });
 
 export { createTaskSchema, taskIdSchema, getTaskQuerySchema, updateTaskSchema };

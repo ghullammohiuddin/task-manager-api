@@ -50,10 +50,6 @@ const getTasksService = async (userId, queryValue) => {
   const totalTasks = Number(countResult[0].total);
   const totalPages = Math.ceil(totalTasks / limitNum);
 
-  console.log('totalTasks:', totalTasks, typeof totalTasks);
-console.log('limitNum:', limitNum, typeof limitNum);
-console.log('totalPages:', totalPages);
-
   return {
     rows,
     page: pageNum,
