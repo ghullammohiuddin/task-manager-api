@@ -1,6 +1,6 @@
 # Task Manager API
 
-A secure and scalable RESTful API for managing tasks with user authentication and authorization. Built using Node.js, Express.js, and MySQL, this project demonstrates production-level backend practices including service layer architecture, centralized error handling, input validation, and dynamic SQL queries.
+A secure and scalable RESTful API for managing tasks with user authentication and authorization. Built using Node.js, Express.js, and MySQL, this project demonstrates production-level backend practices including service layer architecture, centralized error handling, input validation, rate limiting, and dynamic SQL queries.
 
 ---
 
@@ -18,15 +18,16 @@ This Task Manager API allows users to:
 
 ## Tech Stack
 
-| Category       | Technology              |
-|----------------|-------------------------|
-| Backend        | Node.js, Express.js     |
-| Database       | MySQL (mysql2/promise)  |
-| Authentication | JWT (JSON Web Tokens)   |
-| Validation     | Joi                     |
-| Security       | bcrypt                  |
-| Environment    | dotenv                  |
-| Version Control| Git & GitHub            |
+| Category        | Technology              |
+|-----------------|-------------------------|
+| Backend         | Node.js, Express.js     |
+| Database        | MySQL (mysql2/promise)  |
+| Authentication  | JWT (JSON Web Tokens)   |
+| Validation      | Joi                     |
+| Security        | bcrypt, Helmet          |
+| Rate Limiting   | express-rate-limit      |
+| Environment     | dotenv                  |
+| Version Control | Git & GitHub            |
 
 ---
 
@@ -43,6 +44,8 @@ This Task Manager API allows users to:
 - Joi request validation on all endpoints
 - Pagination, status filtering, and sorting with SQL injection prevention
 - Dynamic SQL queries for partial updates
+- Rate limiting — 100 requests per 15 minutes globally, 10 on auth routes
+- Helmet security headers protecting against common vulnerabilities
 - Clean MVC architecture with separate routes, controllers, services, validators
 
 ---
@@ -105,13 +108,13 @@ src/
 
 Supported on `GET /api/tasks/get-tasks`:
 
-| Parameter | Type   | Description                        | Default    |
-|-----------|--------|------------------------------------|------------|
-| page      | number | Page number                        | 1          |
-| limit     | number | Tasks per page (max: 50)           | 10         |
-| status    | string | Filter by status (pending/completed)| —         |
-| sort      | string | Sort field (created_at/title)      | created_at |
-| order     | string | Sort direction (asc/desc)          | desc       |
+| Parameter | Type   | Description                         | Default    |
+|-----------|--------|-------------------------------------|------------|
+| page      | number | Page number                         | 1          |
+| limit     | number | Tasks per page (max: 50)            | 10         |
+| status    | string | Filter by status (pending/completed) | —         |
+| sort      | string | Sort field (created_at/title)       | created_at |
+| order     | string | Sort direction (asc/desc)           | desc       |
 
 ### Example Request
 
@@ -180,6 +183,17 @@ Server runs at `http://localhost:3000`
 
 ---
 
+## Security
+
+- **Helmet** — sets secure HTTP headers protecting against XSS, clickjacking and other common vulnerabilities
+- **Rate Limiting** — global limit of 100 requests per 15 minutes per IP, stricter limit of 10 requests per 15 minutes on auth routes to prevent brute force attacks
+- **bcrypt** — passwords hashed with salt rounds before storage
+- **JWT** — stateless authentication with expiry
+- **Parameterized queries** — all SQL queries use placeholders preventing SQL injection
+- **Input validation** — all request data validated with Joi before processing
+
+---
+
 ## Error Handling
 
 All errors return consistent JSON responses:
@@ -199,6 +213,7 @@ All errors return consistent JSON responses:
 | Expired token        | 401    | Your token has expired.              |
 | Task not found       | 404    | Task not found!                      |
 | Validation error     | 400    | Detailed validation message          |
+| Rate limit exceeded  | 429    | Too many requests                    |
 | Server error         | 500    | Something went wrong                 |
 
 ---
@@ -206,7 +221,6 @@ All errors return consistent JSON responses:
 ## Future Improvements
 
 - Refresh token authentication
-- Rate limiting
 - Unit and integration tests
 - Deployment (Railway, Render)
 - TypeScript migration
