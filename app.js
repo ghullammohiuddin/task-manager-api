@@ -9,19 +9,16 @@ import helmet from "helmet";
 
 const app = express();
 
-
 app.use(helmet());
 
-
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
+  windowMs: 15 * 60 * 1000,
   max: 100,
   message: {
     success: false,
     message: "Too many requests, please try again later.",
   },
 });
-
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -40,7 +37,10 @@ app.use(globalLimiter);
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/tasks", taskRoutes);
 
-// Error handler — must be last
+app.get("/", (req, res) => {
+  res.status(200).json({ success: true, message: "API is running" });
+});
+
 app.use(errorhandlerMiddleware);
 
 db.getConnection()
@@ -52,6 +52,6 @@ db.getConnection()
     console.error("Error connecting to database:", err);
   });
 
-app.listen(process.env.PORT, () => {
-  console.log(`Server running on port ${process.env.PORT}`);
+app.listen(process.env.PORT || 3000, () => {
+  console.log(`Server running on port ${process.env.PORT || 3000}`);
 });
